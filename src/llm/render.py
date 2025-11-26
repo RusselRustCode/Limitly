@@ -79,6 +79,7 @@ def extract_json_from_text(text: str) -> dict:
         raise ValueError(f"Не удалось распарсить JSON: {e}")
 
 def main():
+    #тестовый прогон
     temple = load_template("test_generate.json")
     params = TestParams(
         question_format=QuestionFormat.MULTIPLE_CHOICE,

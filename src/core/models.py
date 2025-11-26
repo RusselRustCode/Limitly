@@ -2,8 +2,7 @@ from pydantic import BaseModel, Field, EmailStr, BeforeValidator
 from bson import ObjectId
 from enum import Enum
 from datetime import datetime
-from typing import List, Optional, Annotated, Dict
-
+from typing import List, Optional, Annotated, Dict, Union
 def convert_objectid(v):
     if isinstance(v, ObjectId):
         return str(v)
@@ -30,10 +29,43 @@ class TeacherDB(BaseModel):
     class Config:
         populate_by_name = True
 
+#Модели для валидации content в LLMGeneratedContent
+class ExplanationContent(BaseModel):
+    explanation_body: str
+    formula_block: str
+
+class DistractorAnalyse(BaseModel):
+    option_text: str
+    error_explanation: str
+
+class TestContent(BaseModel):
+    question_body: str
+    solution_steps: str
+    options: list[str]
+    correct_answer: str
+    distractor_analysis: list[DistractorAnalyse]
+
+class ProblemContent(BaseModel):
+    problem_scenario: str
+    required_input_values: str #Подумать оставляем так или меняем на  Dict[str, Any] или вообще кастомную модель делае
+    solution_steps: str
+    final_answer: str 
+
+class TopicContent(BaseModel):
+    topic_title: str
+    topic_short_summary: str
+    estimated_time_min: int = Field(ge=1, le=1000)
+    complexity_rating: int
+
+class TermContent(BaseModel):
+    term_name: str
+    learning_goal: str
+    estimated_time_min: int = Field(ge=1, le=1000)
+    complexity_rating: int
 
 class LLMGeneratedContent(BaseModel):
     reasoning: str
-    content: dict
+    content: Union[ProblemContent, TopicContent, TestContent, TermContent, ExplanationContent]
 
 #Параметры для промпта, который передастяс LLM
 class OutputFormat(str, Enum):
