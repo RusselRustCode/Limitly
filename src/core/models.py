@@ -100,10 +100,10 @@ class ExampleType(str, Enum):
 # ------------------
 class ContentParams(BaseModel):
 
-    output_format: OutputFormat = Field(
-        ...,
-        description="Формат, в котором LLM должен представить итоговый контент (Markdown или LaTeX)."
-    )
+    # output_format: OutputFormat = Field(
+    #     ...,
+    #     description="Формат, в котором LLM должен представить итоговый контент (Markdown или LaTeX)."
+    # )
 
     target_audience: TargetAudience = Field(
         ...,
@@ -122,7 +122,7 @@ class ContentParams(BaseModel):
 
     language_style: LanguageStyle = Field(
         ...,
-        description="Стиль и обзий тон объяснения "
+        description="Стиль и общий тон объяснения "
     )
 
     explanation_len: ExplanationLenght = Field(
@@ -130,7 +130,7 @@ class ContentParams(BaseModel):
         description="В каком формате(коротко, средне, детально)"
     )
 
-    exampel_type: ExampleType = Field(
+    example_type: ExampleType = Field(
         ...,
         description="Фокусировка примеров (на теории или на реальных жизненных/научных кейсах)"
     )
@@ -180,11 +180,11 @@ class TopicsParams(BaseModel):
     
 class TermsParams(BaseModel):
     topic_title: str = Field(..., description="Название темы")
-    numbers_of_terms: int = Field(..., description="Кол-во терминов")
+    number_of_terms: int = Field(..., description="Кол-во терминов")
     
 class ExampleParams(BaseModel):
     term_name: str = Field(..., description="Название темы")
-    explanation_body: str = Field(..., description="Текст объяснения")
+    # explanation_body: str = Field(..., description="Текст объяснения")
     subject_specialization: str = Field(..., description="Специализация")
     
 
