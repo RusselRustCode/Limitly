@@ -13,7 +13,7 @@ lib/
 lib64/
 
 # Virtual environments
-.venv
+.venv/
 env/
 
 # IDE
