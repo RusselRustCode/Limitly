@@ -31,6 +31,7 @@ class TeacherDB(BaseModel):
 
 #Модели для валидации content в LLMGeneratedContent
 class ExplanationContent(BaseModel):
+    reasoning: str
     explanation_body: str
     formula_block: str
 
@@ -39,25 +40,29 @@ class DistractorAnalyse(BaseModel):
     error_explanation: str
 
 class TestContent(BaseModel):
+    reasoning: str
     question_body: str
     solution_steps: str
     options: list[str]
-    correct_answer: str
+    correct_answer: Union[str, list[str]] #может быть строкой при SingleChoice, а может списком строк при MultipleChoice
     distractor_analysis: list[DistractorAnalyse]
 
 class ProblemContent(BaseModel):
+    reasoning: str
     problem_scenario: str
     required_input_values: str #Подумать оставляем так или меняем на  Dict[str, Any] или вообще кастомную модель делае
     solution_steps: str
     final_answer: str 
 
 class TopicContent(BaseModel):
+    reasoning: str
     topic_title: str
     topic_short_summary: str
     estimated_time_min: int = Field(ge=1, le=1000)
     complexity_rating: int
 
 class TermContent(BaseModel):
+    reasoning: str
     term_name: str
     learning_goal: str
     estimated_time_min: int = Field(ge=1, le=1000)
@@ -104,7 +109,8 @@ class ContentParams(BaseModel):
     #     ...,
     #     description="Формат, в котором LLM должен представить итоговый контент (Markdown или LaTeX)."
     # )
-
+    subject_specialization: str = Field(default="Математическое обеспечение и Администрирование информационных систем", description="Специальность")
+    term_name: str = Field(..., description="Название термина")
     target_audience: TargetAudience = Field(
         ...,
         description="Уровень сложности и акцент на разных сферах"
@@ -168,6 +174,7 @@ class DifficultyLevel(str, Enum):
 #-------------------------
 
 class TestParams(BaseModel):
+    term_name: str
     question_format: QuestionFormat
     cognitive_level: CognitiveLevel
     distractor_error_type: DistractorErrorType
@@ -176,13 +183,14 @@ class TestParams(BaseModel):
     difficulty_level: DifficultyLevel
     
 class TopicsParams(BaseModel):
+    subject_name: str = Field(..., description="Название предмета")
     number_of_topics: int = Field(..., description="Количество тем")
     
 class TermsParams(BaseModel):
     topic_title: str = Field(..., description="Название темы")
     number_of_terms: int = Field(..., description="Кол-во терминов")
     
-class ExampleParams(BaseModel):
+class ProblemParams(BaseModel):
     term_name: str = Field(..., description="Название темы")
     # explanation_body: str = Field(..., description="Текст объяснения")
     subject_specialization: str = Field(..., description="Специализация")
