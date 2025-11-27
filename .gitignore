@@ -21,5 +21,7 @@ env/
 .idea/
 *.swp
 *.swo
-*.txt
+requirements.txt
+план.txt
+системные_промпты.txt
 *.gif

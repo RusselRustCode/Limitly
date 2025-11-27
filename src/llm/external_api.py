@@ -1,26 +1,29 @@
+import logging
+import re
+from json_repair import repair_json
+from typing import Union, Any
+from fastapi import HTTPException
 from langchain_core.messages import HumanMessage
 from langchain_gigachat.chat_models import GigaChat
-from src.llm.render import load_template, map_content_params_to_template, map_test_params_to_template, render_prompt_template, map_example_params_to_template, map_terms_params_to_template, map_topics_params_to_template, extract_json_from_text
-import logging
-import json
-from src.core.models import LLMGeneratedContent, ContentParams, TestParams, TermsParams, TopicsParams, ExampleParams
-from fastapi import HTTPException
-from pydantic import ValidationError
-from typing import TypeVar, Dict, Callable, Tuple, Type
+from langchain_core.output_parsers import PydanticOutputParser
+from src.core.models import (
+    ContentParams, TestParams, TopicsParams, TermsParams, ProblemParams,
+    LLMGeneratedContent,
+    ExplanationContent, TestContent, TopicContent, TermContent, ProblemContent
+)
+from src.llm.templates import (
+    get_explanation_long_content,
+    get_test_prompt,
+    get_topic_prompt,
+    get_term_prompt,
+    get_problem_example_prompt
+)
+
 from src.core.models import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-ValidModels = TypeVar('ValidModels', ContentParams, TestParams, TermsParams, TopicsParams, ExampleParams)
-
-TEMPLATE_MAPPING: Dict[Type[ValidModels], Tuple[str, Callable]] = {
-    ContentParams: ("explanation.json", map_content_params_to_template),
-    TestParams: ("test_generate.json", map_test_params_to_template),
-    TopicsParams: ("topics.json", map_topics_params_to_template),
-    TermsParams: ("terms.json", map_terms_params_to_template),
-    ExampleParams: ("problem_example.json", map_example_params_to_template)
-}
 
 try: 
     chat = GigaChat(
@@ -32,45 +35,154 @@ try:
 except Exception as e:
     raise logger.error(f"Error: {e}")
 
-def generate_llm_content(content_params: ValidModels) -> LLMGeneratedContent:
-    template_name, map_func = TEMPLATE_MAPPING[type[content_params]]
-def generate_llm_content(content_params: ValidModels) -> LLMGeneratedContent:
-    template_name, map_func = TEMPLATE_MAPPING[type(content_params)]
+
+ValidParams = Union[ContentParams, TestParams, TopicsParams, TermsParams, ProblemParams]
+
+ValidContents = Union[ExplanationContent, TestContent, TopicContent, TermContent, ProblemContent]
+
+
+PROMPT_AND_PARSER_MAP = {
+    ContentParams: (get_explanation_long_content, PydanticOutputParser(pydantic_object=ExplanationContent)),
+    TestParams: (get_test_prompt, PydanticOutputParser(pydantic_object=TestContent)),
+    TopicsParams: (get_topic_prompt, PydanticOutputParser(pydantic_object=TopicContent)),
+    TermsParams: (get_term_prompt, PydanticOutputParser(pydantic_object=TermContent)),
+    ProblemParams: (get_problem_example_prompt, PydanticOutputParser(pydantic_object=ProblemContent)),
+}
+
+PARAMS_TO_CONTENT_MODEL = {
+    ContentParams: ExplanationContent,
+    TestParams: TestContent,
+    TopicsParams: TopicContent,
+    TermsParams: TermContent,
+    ProblemParams: ProblemContent,
+}
+
+
+def extract_json_block(text: str) -> str:
+    """Извлекает JSON из markdown-блока или возвращает весь текст."""
+    # Ищем блок ```json ... ``` или просто ```
+    match = re.search(r"```(?:json)?\s*({.*})\s*```", text, re.DOTALL)
+    if match:
+        return match.group(1)
+    # Если нет markdown — ищем первый { ... }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        return text[start:end + 1]
+    return text.strip()
+
+def extract_input_vars(params: ValidParams) -> Dict[str, Any]:
+    if isinstance(params, ContentParams):
+        return {
+            "term_name": params.term_name,
+            "subject_specialization": params.subject_specialization,
+            "target_audience": params.target_audience.value,
+            "language_style": params.language_style.value,
+            "explanation_len": params.explanation_len.value,
+            "example_type": params.example_type.value,
+            "usage_toggle": params.usage_toggle.value,
+            "historical_content": params.historical_content.value
+        }
+    elif isinstance(params, TestParams):
+        if params.question_format == QuestionFormat.MULTIPLE_CHOICE:
+            choice_description = f"{params.number_of_choices} вариантов (несколько могут быть правильными)"
+        elif params.question_format == QuestionFormat.SINGLE_CHOICE:
+            choice_description = f"{params.number_of_choices} вариантов (1 правильный, {params.number_of_choices - 1} дистракторов)"
+        else:  #открытый вопрос
+            choice_description = "Открытый вопрос — без вариантов ответа"
+        return {
+            "term_name": params.term_name,
+            "question_format": params.question_format.value,
+            "cognitive_level": params.cognitive_level.value,
+            "distractor_error_type": params.distractor_error_type.value,
+            "number_of_choices": choice_description,
+            "difficulty_level": params.difficulty_level.value,
+            "context_requirement": params.context_requirement.value
+        }
+    elif isinstance(params, TopicsParams):
+        return {
+            "subject_name": params.subject_name,
+            "number_of_topics": str(params.number_of_topics)
+        }
+    elif isinstance(params, TermsParams):
+        return {
+            "topic_title": params.topic_title,
+            "number_of_terms": str(params.number_of_terms)         
+        }    
+    elif isinstance(params, ProblemParams):
+        return {
+            "term_name": params.term_name,
+            "term_name": params.subject_specialization,
+            #explanation_body???
+        }
+    else:
+        raise ValueError(f"Неизвестные тип параметров: {type(params)}")
+
+async def generate_llm_content(params: ValidParams) -> LLMGeneratedContent:
+    param_type = type(params)
     
-    template = load_template(template_name)
+    if param_type not in PROMPT_AND_PARSER_MAP:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Не поддерживаемый тип параметров: {param_type.__name__}"
+        )
     
-    map = map_func(content_params)
+    prompt_func, parser = PROMPT_AND_PARSER_MAP[param_type] #убрать к хуям парсер, нерабочее говно!!!
+    prompt_template = await prompt_func()
     
-    filled_map = render_prompt_template(template, **map)
-    
-    messages = [
-        HumanMessage(content=filled_map)
-    ]
+    input_vars = extract_input_vars(params)
     
     try:
+        prompt_text = prompt_template.format(**input_vars)
+    except KeyError as e:
+        missing = e.args[0]
+        logger.error(f"Отсутствует переменная в промпте: {missing}. Доступные: {list(input_vars.keys())}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка формирования промпта: не хватает переменной '{missing}'"
+        )
+    
+    logger.debug(f"Финальный промпт:\n{prompt_text[:500]}...")
+    
+    messages = [HumanMessage(content=prompt_text)]
+    try:
         response = chat.invoke(messages)
-        raw_response_text = response.content
-        logger.info(f"Ответ LLM: {raw_response_text}")
-
-        json_response = extract_json_from_text(raw_response_text)
-        # validated_content = LLMGeneratedContent.model_validate(json_response)
-        return json_response
-
-    except ValidationError as ve:
-        logger.error(f"Ошибка валидации ответа LLM: {ve}")
-        raise HTTPException(status_code=500, detail=f"Ошибка валидации ответа LLM: {ve}")
-    except json.JSONDecodeError as je:
-        logger.error(f"Ошибка парсинга JSON из ответа LLM: {je}")
-        raise HTTPException(status_code=500, detail=f"LLM вернул некорректный JSON.")
+        raw_output = response.content
+        logger.info(f"Сырой ответ LLM (первые 300 символов): {raw_output[:300]}...")
     except Exception as e:
-        logger.error(f"Ошибка при вызове LLM: {e}")
-        raise
+        logger.error(f"Ошибка вызова LLM: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка при обращении к LLM")
+    
+    try:
+        # 1. Извлекаем JSON-блок
+        json_str = extract_json_block(raw_output)
 
+        # 2. Парсим через json5 (терпимо к \l, \t и т.д.)
+        data = repair_json(json_str, return_objects=True)
+        if not isinstance(data, dict):
+            raise ValueError("Результат не является объектом")
 
+        # 3. Валидируем через Pydantic
+        content_model = PARAMS_TO_CONTENT_MODEL[param_type]
+        parsed_content = content_model.model_validate(data)
 
+    except Exception as e:
+        # Логируем для отладки
+        print("=== ОШИБКА ПАРСИНГА ===")
+        print("Сырой ответ LLM:")
+        print(raw_output)
+        print("=== КОНЕЦ ОТВЕТА ===")
+        raise HTTPException(status_code=500, detail="LLM вернул ответ в неверном формате")
+    
+    return LLMGeneratedContent(
+        reasoning=parsed_content.reasoning,
+        content=parsed_content
+    )
 
-def main():
+async def main():
+    #тест
     params = TestParams(
+        term_name="Интегрирования",
         question_format=QuestionFormat.MULTIPLE_CHOICE,
         cognitive_level=CognitiveLevel.ANALYSIS,
         distractor_error_type=DistractorErrorType.CONCEPTUAL,
@@ -78,40 +190,15 @@ def main():
         context_requirement=ContextRequirement.SCENARIO,
         difficulty_level=DifficultyLevel.MEDIUM  
     )
+    result = await generate_llm_content(params)
+    print("Reasoning:", result.reasoning[:200] + "...")
+    print("Question:", result.content.question_body)
+    print("Options:", result.content.options)
     
-    content = generate_llm_content(params)
-    print(json.dumps(content, indent=2, ensure_ascii=False))
-    print("\nreasoning:", content.get('reasoning'))
-   
-    print("options:", content.get('mini_test', {}).get('options'))
-
-
-    print("solution_steps:", content.get('mini_test', {}).get('solution_steps'))
-
-    
-    print("correct_answer:", content.get('mini_test', {}).get('correct_answer'))
-
-    
-    print("distractor_analysis:", content.get('mini_test', {}).get('distractor_analysis'))
-
-
-    options_list = content.get('mini_test', {}).get('options', [])
-    if options_list:
-        print("first option:", options_list[0])
-    else:
-        print("options list is empty")
-
-
-    distractors = content.get('mini_test', {}).get('distractor_analysis', [])
-    if distractors:
-        first_distractor = distractors[0] # Это будет словарь
-        print("first distractor text:", first_distractor.get('option_text'))
-    else:
-        print("distractor_analysis list is empty")
-
     
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
 
 
 
