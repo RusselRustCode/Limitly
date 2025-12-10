@@ -54,19 +54,28 @@ class ProblemContent(BaseModel):
     solution_steps: str
     final_answer: str 
 
-class TopicContent(BaseModel):
-    reasoning: str
+class TopicItem(BaseModel):
+    reason: str
     topic_title: str
     topic_short_summary: str
     estimated_time_min: int = Field(ge=1, le=1000)
     complexity_rating: int
 
-class TermContent(BaseModel):
+
+class TopicContent(BaseModel):
     reasoning: str
+    topics: List[TopicItem]
+
+class TermItem(BaseModel):
+    reason: str
     term_name: str
     learning_goal: str
     estimated_time_min: int = Field(ge=1, le=1000)
     complexity_rating: int
+
+class TermContent(BaseModel):
+    reasoning: str
+    terms: List[TermItem]
 
 class LLMGeneratedContent(BaseModel):
     reasoning: str

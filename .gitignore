@@ -25,3 +25,4 @@ requirements.txt
 план.txt
 системные_промпты.txt
 *.gif
+tests/

@@ -6,6 +6,7 @@ from src.api.routers.v1 import auth
 from src.api.routers.v1.auth import router
 from src.api.routers.v1.llm import llm_router
 import asyncio
+from fastapi.middleware.cors import CORSMiddleware
 from authx import AuthX, AuthXConfig
 
 
@@ -19,6 +20,14 @@ config = AuthXConfig(
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000"],  # или ["*"] для разработки
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

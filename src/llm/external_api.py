@@ -59,8 +59,6 @@ PARAMS_TO_CONTENT_MODEL = {
 
 
 def extract_json_block(text: str) -> str:
-    """Извлекает JSON из markdown-блока или возвращает весь текст."""
-    # Ищем блок ```json ... ``` или просто ```
     match = re.search(r"```(?:json)?\s*({.*})\s*```", text, re.DOTALL)
     if match:
         return match.group(1)
@@ -112,7 +110,7 @@ def extract_input_vars(params: ValidParams) -> Dict[str, Any]:
     elif isinstance(params, ProblemParams):
         return {
             "term_name": params.term_name,
-            "term_name": params.subject_specialization,
+            "subject_specialization": params.subject_specialization,
             #explanation_body???
         }
     else:
@@ -154,20 +152,19 @@ async def generate_llm_content(params: ValidParams) -> LLMGeneratedContent:
         raise HTTPException(status_code=500, detail="Ошибка при обращении к LLM")
     
     try:
-        # 1. Извлекаем JSON-блок
         json_str = extract_json_block(raw_output)
 
-        # 2. Парсим через json5 (терпимо к \l, \t и т.д.)
+        # Парсим через json5 (терпимо к \l, \t и т.д.)
         data = repair_json(json_str, return_objects=True)
         if not isinstance(data, dict):
             raise ValueError("Результат не является объектом")
+        
+        reasoning = data.pop("reasoning")
 
-        # 3. Валидируем через Pydantic
         content_model = PARAMS_TO_CONTENT_MODEL[param_type]
         parsed_content = content_model.model_validate(data)
 
     except Exception as e:
-        # Логируем для отладки
         print("=== ОШИБКА ПАРСИНГА ===")
         print("Сырой ответ LLM:")
         print(raw_output)
@@ -181,19 +178,45 @@ async def generate_llm_content(params: ValidParams) -> LLMGeneratedContent:
 
 async def main():
     #тест
-    params = TestParams(
-        term_name="Интегрирования",
-        question_format=QuestionFormat.MULTIPLE_CHOICE,
-        cognitive_level=CognitiveLevel.ANALYSIS,
-        distractor_error_type=DistractorErrorType.CONCEPTUAL,
-        number_of_choices=NumberOfChoices.MEDIUM,
-        context_requirement=ContextRequirement.SCENARIO,
-        difficulty_level=DifficultyLevel.MEDIUM  
+    # params = TestParams(
+    #     term_name="Интегрирования",
+    #     question_format=QuestionFormat.MULTIPLE_CHOICE,
+    #     cognitive_level=CognitiveLevel.ANALYSIS,
+    #     distractor_error_type=DistractorErrorType.CONCEPTUAL,
+    #     number_of_choices=NumberOfChoices.MEDIUM,
+    #     context_requirement=ContextRequirement.SCENARIO,
+    #     difficulty_level=DifficultyLevel.MEDIUM  
+    # )
+    
+    topics_params = TopicsParams(
+        subject_name="Матанализ 1 курс",
+        number_of_topics=7
     )
-    result = await generate_llm_content(params)
+    
+    term_params = TermsParams(
+        topic_title="Пределы",
+        number_of_terms=3
+    )
+    
+    problem = ProblemParams(
+        term_name="Предел функции",
+        subject_specialization="Физика",
+    )
+    
+    content = ContentParams(
+        term_name="Предел функции",
+        target_audience=TargetAudience.NON_MATHEMATICIANS,
+        usage_toggle=UsageToggle.YES,
+        historical_content=UsageToggle.NO,
+        language_style=LanguageStyle.CASUAL,
+        explanation_len=ExplanationLenght.MEDIUM,
+        example_type=ExampleType.REAL_CASE
+    )
+    result = await generate_llm_content(content)
     print("Reasoning:", result.reasoning[:200] + "...")
-    print("Question:", result.content.question_body)
-    print("Options:", result.content.options)
+    print("---------------------")
+    print("Question:", result.content.explanation_body)
+
     
     
 if __name__ == "__main__":

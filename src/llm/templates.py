@@ -28,7 +28,7 @@ async def get_test_prompt() -> PromptTemplate:
     
 async def get_topic_prompt() -> PromptTemplate:
     return PromptTemplate(
-        template=_load_prompt("topcis.txt"),
+        template=_load_prompt("topics.txt"),
         input_variables=["subject_name", "number_of_topics"]
     )
     
