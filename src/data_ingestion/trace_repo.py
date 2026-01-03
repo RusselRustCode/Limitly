@@ -1,11 +1,7 @@
 from src.core.database import get_database
 from src.core.models import TraceLog
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from motor.motor_asyncio import AsyncIOMotorChangeStream
-from bson import ObjectId
 from typing import List
-import asyncio
-import time
 from typing import Optional
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -66,5 +62,14 @@ class TraceRepository:
 
     async def get_log_by_material_id(self, material_id: str) -> List[TraceLog]:
         return await self.get_logs_by_filter({"material_id": material_id})
-
+    
+    def start_scheduled_jobs(self):
+        self.scheduler.add_job(self.run_analysis_job, 'cron', hour = '0,12')
+        
+        
+        #Для проверки
+        # self.scheduler.add_job(self.run_analysis_job, 'interval')
+        
+        self.scheduler.start()
+        print("Планировщик запущен")
 
