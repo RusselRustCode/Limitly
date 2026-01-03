@@ -223,6 +223,42 @@ class TraceLog(BaseModel):
     viewed_material_before: bool = Field(..., description="Смотрел ли материал до этого")
     timestamped: datetime = Field(default_factory=datetime.utcnow, description="Время записи лога")
 
+
+ArtifactContent = Union[
+    TestContent, 
+    ExplanationContent, 
+    ProblemContent, 
+    TopicContent, 
+    TermContent
+]
+
+# Параметры генерации также могут быть разными в зависимости от типа артефакта 
+ArtifactParams = Union[
+    TestParams, 
+    ContentParams, 
+    ProblemParams, 
+    TopicsParams, 
+    TermsParams
+]
+
+class GeneratedArtifact(BaseModel):
+    id: PyObjectId = Field(alias="_id", description="")
+    materia_id: PyObjectId = Field(..., description="Ссылка на learning_materials._id")
+    arifact_type: str = Field(..., description="")
+    content: ArtifactContent = Field(..., description="")
+    params_used: Optional[ArtifactParams] = Field(
+        None, 
+        description="Параметры генерации (TestParams, ContentParams и т.д.)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, 
+        description="Время регистрации"
+    )
+    created_by: PyObjectId = Field(..., description="ID Преподавателя")
+    
+    class Config: 
+        populate_by_name = True
+
 #-------------------------
 #Добавить компоненты для AnalyseResult
 class StudentCluster(BaseModel):
