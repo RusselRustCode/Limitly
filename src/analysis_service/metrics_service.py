@@ -81,7 +81,7 @@ def calculate_distractor_index(
 
 class MetricsCalculator:
     def __init__(self):
-        self.config = self._load_config()
+        self.config = self.load_config()
         self.thresholds = self.config["thresholds"]
         
         # Загружаем пороги
