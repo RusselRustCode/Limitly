@@ -1,0 +1,46 @@
+profiles:
+  - id: theorist
+    display_name: "Маяк (интуитивный)"
+    description: "Академический стиль, строгие формулы, и полные доказательства"
+    parameters:
+        language_style: "ACADEMIC"
+        usage_toggle: "NO"
+        historical_context: "YES"
+        example_type: "THEORETICAL"
+    constraints:
+        - "Приоритет 1: Математическая строгость"
+        - "Приоритет 2: Формальность и полнота определний"
+        - "Bloom target: Анализ + Синтез + Оценка"
+    bloom_target: "Анализ + Синтез + Оценка"
+
+  - id: engineer
+    display_name: "Инженер-прикладник"
+    description: "Технический стиль, упор на алгоритмы и применение в расчетах"
+    parameters:
+        language_style: "TECHNICAL_PRAGMATIC"
+        usage_toggle: "NO"
+        historical_context: "NO"
+        example_type: "REAL_CASE"
+    constraints:
+        - "Приоритет 0: Отдается приоритет схеме доказательств, а не полному доказательству"
+        - "Приоритет 1: Алгоритм шаг за шагом"
+        - "Приоритет 2: Практическое применение"
+        - "Bloom target: Применение + Анализ"
+    bloom_target: "Применение + Анализ"
+
+  - id: lighthouse
+    display_name: "Маяк (интуитивный)"
+    description: "Интуитивный стиль, много аналогий, постепенное погружение."
+    parameters:
+        language_style: "INTUITIVE_SIMPLE"
+        usage_toggle: "YES"
+        historical_context: "YES"
+        example_type: "real_case"
+    constraints:
+        - "Приоритет 1: Изложение в свободном стиле с целью интуитивного понимания"
+        - "Приоритет 2: Аналогии"
+        - "Приоритет 3: Постепенное погружение"
+        - "Bloom target: Знание + Понимание + Применение"
+    bloom_target: "Знание + Понимание + Применение"
+
+    
