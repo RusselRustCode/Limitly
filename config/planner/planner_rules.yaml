@@ -1,15 +1,12 @@
 # ====================== THRESHOLDS ======================
-# Все пороговые значения вынесены в отдельную секцию.
-# Теперь их можно менять без правки кода — преподаватель или аналитик просто редактирует файл.
-
-thresholds: 
+thresholds:
     n_threshold: 30
-    m_min: 0.64 # минимально приемлемый уровень освоения термина (M_term)
-    t_low: 0.7 # нижний порог временного коэффициента
-    t_high: 1.3 # верхний порог
-    dp_critical: 0.45 # критический вес паттерна ошибки (D_p)
-    attempts_critical: 2.5 # среднее количество попыток, после которого студент "застрял"
-    e_fresh_min: 0.55    # минимальная эффективность на свежей группе (E_fresh)
+    m_min: 0.55                    # было 0.64 — теперь правила срабатывают раньше
+    t_low: 0.7
+    t_high: 1.3
+    dp_critical: 0.35              # было 0.45 — теперь модель чаще видит ошибки
+    attempts_critical: 2.5
+    e_fresh_min: 0.55
     time_ref:
       knowledge: 30
       comprehension: 45
@@ -18,70 +15,61 @@ thresholds:
       synthesis: 180
       evaluation: 180
 
-
 # ====================== RULES ======================
-# Правила сортируются по priority (1 — самое важное).
-# Можно одновременно сработать несколько правил — дальше смотрим conflict_resolution.
 rules:
   - id: "rule_complexity_high"
-    condition: "m_term < thresholds.m_min and t_ratio > thresholds.t_high"
+    condition: "m_term < m_min and t_ratio > t_high"
     priority: 1
-    weight: 1.0
+    weight: 1.3
     directive:
-      action: "DECOMPOSE"
+      action: "decompose"
       target: "theoretical_block"
       strategy: "Scaffolding"
-      insight: "..."
-    required_for: ["E_fresh"]
+      insight: "Разбить объяснение на 4–6 мелких шагов с отдельными заголовками."
 
   - id: "rule_misconception_dominant"
-    condition: "m_term < thresholds.m_min and d_p > thresholds.dp_critical"
+    condition: "m_term < m_min and max_d_p > dp_critical"
     priority: 2
-    weight: 1.2
+    weight: 1.5
     directive:
-      action: "CONTRAST"
+      action: "contrast"
       target: "assessment_block"
       strategy: "Error_Augmentation"
-      insight: "Обнаружен устойчивый паттерн ошибки. Нужно явно противопоставить верный алгоритм и ошибочный с помощью контр-примеров."
-    error_type_filter: ["Conceptual", "Procedural"]
+      insight: "Обязательно добавить таблицу 'Правильный подход vs Типичная ошибка' + минимум 2 контр-примера."
 
   - id: "rule_low_mastery_normal_time"
-    condition: "m_term < thresholds.m_min and 0.8 <= t_ratio <= 1.2"
+    condition: "m_term < m_min and 0.8 <= t_ratio <= 1.2"
     priority: 3
-    weight: 1.0
+    weight: 1.2
     directive:
-      action: "REINFORCE"
+      action: "reinforce"
       target: "examples_block"
       strategy: "Drill_and_Practice"
-      insight: "Время в норме, но результат низкий. Добавить больше разобранных примеров и вариаций для механического закрепления."
-
+      insight: "Добавить пошаговый чек-лист решения + 2 дополнительных примера разной сложности."
 
   - id: "rule_stuck_pattern"
-    condition: "m_term < thresholds.m_min and attempts > thresholds.attempts_critical"
+    condition: "m_term < m_min and attempts > attempts_critical"
     priority: 4
-    weight: 1.1
+    weight: 1.4
     directive:
-      action: "GUIDE"
+      action: "guide"
       target: "hints_layer"
       strategy: "Step_by_step_hinting"
-      insight: "Высокое число попыток — студенты теряют путь решения. Добавить многоуровневые подсказки (от общего к конкретному)."
+      insight: "Вставить визуализацию (график или блок-схему) + многоуровневые подсказки."
 
-# ====================== GLOBAL SETTINGS ======================
-# Как обрабатывать конфликты и сколько директив отдавать LLM за раз
+# ====================== GLOBAL ======================
 global:
-  conflict_resolution: "merge_all"          # варианты: "top_k_by_priority", "merge_all", "llm_decide"
+  conflict_resolution: "merge_all"
   max_directives_per_iteration: 3
-  min_confidence: 0.6                       # если вес правила ниже — игнорируем
   use_e_fresh_only: true
 
 # ====================== FALLBACK ======================
-# Если ничего не подошло, т.е. очень низкое качество, но без явного паттерна
 fallback_rule:
   id: "rule_generic"
   condition: "always"
-  priority: 999
+  priority: 5
   directive:
-    action: "REVIEW"
+    action: "review"
     target: "full_content"
     strategy: "General_Clarity"
-    insight: "Общее низкое освоение без явного паттерна. Провести полный ревью всего артефакта."
+    insight: "Добавить таблицу сравнения правильного и ошибочного подхода + минимум один контр-пример."
