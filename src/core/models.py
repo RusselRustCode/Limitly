@@ -9,6 +9,84 @@ def convert_objectid(v):
     return v
 
 PyObjectId = Annotated[str, BeforeValidator(convert_objectid)] #Чекнуть BeforeValidator
+
+# ----------------- ENUMS ДЛЯ АНАЛИЗА ЦС -----------------
+
+class BloomLevel(str, Enum):
+    """Таксономия Блума для когнитивной классификации заданий"""
+    KNOWLEDGE = "knowledge"  # Знание, воспроизведение фактов
+    COMPREHENSION = "comprehension"  # Понимание
+    APPLICATION = "application"  # Применение
+    ANALYSIS = "analysis"  # Анализ
+    SYNTHESIS = "synthesis"  # Синтез
+    EVALUATION = "evaluation"  # Оценка
+
+    @property
+    def weight(self) -> float:
+        """Вес когнитивной сложности по таксономии Блума"""
+        weights = {
+            BloomLevel.KNOWLEDGE: 1.0,
+            BloomLevel.COMPREHENSION: 1.0,
+            BloomLevel.APPLICATION: 2.0,
+            BloomLevel.ANALYSIS: 2.0,
+            BloomLevel.SYNTHESIS: 3.0,
+            BloomLevel.EVALUATION: 3.0,
+        }
+        return weights.get(self, 1.0)
+
+class ErrorType(str, Enum):
+    """Типы ошибок для дистракторного анализа"""
+    OPERATIONAL = "operational"  # Вычислительные ошибки, знаки
+    CONCEPTUAL = "conceptual"  # Непонимание сути термина
+    PROCEDURAL = "procedural"  # Нарушение алгоритма решения
+    STRATEGIC = "strategic"  # Неверный выбор метода решения
+
+class AdaptationStrategy(str, Enum):
+    """Стратегии адаптации контента для Агента-Планировщика"""
+    SIMPLIFICATION = "simplification"  # Упрощение синтаксиса, лексики
+    ACCENTUATION = "accentuation"  # Акцентирование на проблемной зоне
+    DECOMPOSITION = "decomposition"  # Декомпозиция на шаги
+    CONCEPT_BLOCK = "concept_block"  # Внедрение концептуальных блоков
+    PROCEDURAL_CHECKLIST = "procedural_checklist"  # Трансформация в чек-лист
+    
+    # Новые стратегии для жёстких правил
+    DECOMPOSE = "decompose"  # Декомпозиция на мелкие шаги
+    CONTRAST = "contrast"  # Противопоставление правильного и ошибочного
+    REINFORCE = "reinforce"  # Усиление примерами и практикой
+    GUIDE = "guide"  # Пошаговое ведение с подсказками
+    REVIEW = "review"  # Полное ревью контента
+
+class AnalysisTrigger(str, Enum):
+    """Триггеры для запуска анализа и перегенерации"""
+    N_THRESHOLD = "n_threshold"  # Накопление N пользователей
+    CRITICAL_EFFICIENCY = "critical_efficiency"  # Падение E < F
+    EXPERT_REQUEST = "expert_request"  # Принудительный запрос преподавателя
+
+# ----------------- МОДЕЛИ ДЛЯ СТРУКТУРЫ КУРСА -----------------
+
+class Subject(BaseModel):
+    """Модель предмета/дисциплины"""
+    id: PyObjectId = Field(alias="_id", description="Уникальный ID предмета")
+    slug: str = Field(..., description="Человекочитаемый ID для URL")
+    title: str = Field(..., description="Название предмета")
+    created_by: PyObjectId = Field(..., description="ID преподавателя-владельца")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Дата создания")
+
+    class Config:
+        populate_by_name = True
+
+class Topic(BaseModel):
+    """Модель темы внутри предмета"""
+    id: PyObjectId = Field(alias="_id", description="ID Темы")
+    subject_id: PyObjectId = Field(..., description="Ссылка на родительский предмет")
+    title: str = Field(..., description="Название темы")
+    complexity_rating: int = Field(default=3, ge=1, le=5, description="Целевая сложность (1-5)")
+    order_index: int = Field(default=0, description="Позиция в иерархии курса")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Дата создания")
+
+    class Config:
+        populate_by_name = True
+
 # ----------------- МОДЕЛИ АУТЕНТИФИКАЦИИ -----------------
 class TeacherLogin(BaseModel):
     email: EmailStr = Field(...)
@@ -31,28 +109,24 @@ class TeacherDB(BaseModel):
 
 #Модели для валидации content в LLMGeneratedContent
 class ExplanationContent(BaseModel):
-    reasoning: str
     explanation_body: str
-    formula_block: str
 
 class DistractorAnalyse(BaseModel):
     option_text: str
     error_explanation: str
 
 class TestContent(BaseModel):
-    reasoning: str
     question_body: str
-    solution_steps: str
+    solution_steps: list[str]  # Список шагов решения
     options: list[str]
-    correct_answer: Union[str, list[str]] #может быть строкой при SingleChoice, а может списком строк при MultipleChoice
+    correct_answer: Union[str, list[str]]  # может быть строкой при SingleChoice, а может списком строк при MultipleChoice
     distractor_analysis: list[DistractorAnalyse]
 
 class ProblemContent(BaseModel):
-    reasoning: str
     problem_scenario: str
-    required_input_values: str #Подумать оставляем так или меняем на  Dict[str, Any] или вообще кастомную модель делае
-    solution_steps: str
-    final_answer: str 
+    required_input_values: list[str]  # Список входных данных для задачи
+    solution_steps: list[str]  # Список шагов решения
+    final_answer: str
 
 class TopicItem(BaseModel):
     reason: str
@@ -63,7 +137,6 @@ class TopicItem(BaseModel):
 
 
 class TopicContent(BaseModel):
-    reasoning: str
     topics: List[TopicItem]
 
 class TermItem(BaseModel):
@@ -74,7 +147,6 @@ class TermItem(BaseModel):
     complexity_rating: int
 
 class TermContent(BaseModel):
-    reasoning: str
     terms: List[TermItem]
 
 class LLMGeneratedContent(BaseModel):
@@ -113,42 +185,13 @@ class ExampleType(str, Enum):
 
 # ------------------
 class ContentParams(BaseModel):
-
-    # output_format: OutputFormat = Field(
-    #     ...,
-    #     description="Формат, в котором LLM должен представить итоговый контент (Markdown или LaTeX)."
-    # )
-    subject_specialization: str = Field(default="Математическое обеспечение и Администрирование информационных систем", description="Специальность")
+    """Минимальные параметры. Всё остальное (стиль, метафоры, Bloom и т.д.) берётся из profiles.yaml"""
     term_name: str = Field(..., description="Название термина")
-    target_audience: TargetAudience = Field(
-        ...,
-        description="Уровень сложности и акцент на разных сферах"
-    )
-
-    usage_toggle: UsageToggle = Field(
-        ...,
-        description="Использовать ли метафоры для облегчения усвоения материала"
-    )
-
-    historical_content: UsageToggle = Field(
-        ...,
-        description="Использовать ли исторический контекст"
-    )
-
-    language_style: LanguageStyle = Field(
-        ...,
-        description="Стиль и общий тон объяснения "
-    )
-
-    explanation_len: ExplanationLenght = Field(
-        ...,
-        description="В каком формате(коротко, средне, детально)"
-    )
-
-    example_type: ExampleType = Field(
-        ...,
-        description="Фокусировка примеров (на теории или на реальных жизненных/научных кейсах)"
-    )
+    subject_specialization: str = Field(..., description="Специализация (Матанализ, Физика и т.д.)")
+    profile_id: str = Field(default="engineer", description="ID профиля из profiles.yaml (theorist / engineer / lighthouse)")
+    
+    # Опционально
+    topic_title: Optional[str] = None
 #-------------------------
 #Добавить компоненты для Промта по генерации тестов(вопросов)
 class QuestionFormat(str, Enum):
@@ -209,19 +252,30 @@ class ProblemParams(BaseModel):
 #Добавить компоненты для TraceLog
 #-------------------------
 class TraceLog(BaseModel):
-    student_id: str = Field(..., description="id Студента")
-    material_id: str = Field(..., description="id учебного материала")
-    question_id: str = Field(..., description="id Вопроса")
+    student_id: PyObjectId = Field(..., description="ID Студента")
+    artifact_id: PyObjectId = Field(..., description="ID конкретной версии артефакта")
+    material_id: Optional[PyObjectId] = Field(None)
+    question_id: Optional[PyObjectId] = Field(None)
 
-    attempts: int = Field(..., description="Количество попыток")
-    is_correct: bool = Field(..., description="Правильность ответа")
-    time_spent_on_q: int = Field(..., description="Время потраченное на вопрос(секунды)")
-    time_spent_on_m: int = Field(..., description="Время потраченное на материал(в секундах)")
+    attempts: int = Field(...)
+    is_correct: bool = Field(...)
+    time_spent_on_q: Optional[int] = Field(None)
+    time_spent_on_m: Optional[int] = Field(None)
+    time_spent_sec: int = Field(...)
 
-    selected_distractor: Optional[str] = Field(None, description="Текст выбранного дистрактора")
+    selected_distractor: Optional[str] = Field(None)
+    selected_error_type: Optional[ErrorType] = Field(None)
 
-    viewed_material_before: bool = Field(..., description="Смотрел ли материал до этого")
-    timestamped: datetime = Field(default_factory=datetime.utcnow, description="Время записи лога")
+    viewed_material_before: bool = Field(...)
+    is_nav_back: bool = Field(default=False)
+
+    # === НОВОЕ ПОЛЕ ===
+    first_exposure: bool = Field(default=True, description="True, если студент видит этот термин/артефакт впервые")
+
+    timestamped: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
 
 
 ArtifactContent = Union[
@@ -244,99 +298,152 @@ ArtifactParams = Union[
 class GeneratedArtifact(BaseModel):
     id: PyObjectId = Field(alias="_id", description="")
     materia_id: PyObjectId = Field(..., description="Ссылка на learning_materials._id")
-    arifact_type: str = Field(..., description="")
+    term_id: PyObjectId = Field(..., description="Ссылка на термин/материал")
+    artifact_type: str = Field(..., description="Тип: explanation, problem_case, test_question")
+    version: str = Field(default="1.0", description="Версия контента (например, 1.1)")
+    is_active: bool = Field(default=True, description="Флаг актуальной версии для выдачи группе")
+    bloom_weight: float = Field(default=1.0, description="Вес по таксономии Блума (1.0, 2.0, 3.0)")
     content: ArtifactContent = Field(..., description="")
+    distractor_analysis: Optional[List[DistractorAnalyse]] = Field(
+        None,
+        description="Типизация ошибок для каждого варианта ответа"
+    )
     params_used: Optional[ArtifactParams] = Field(
-        None, 
+        None,
         description="Параметры генерации (TestParams, ContentParams и т.д.)"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, 
+        default_factory=datetime.utcnow,
         description="Время регистрации"
     )
     created_by: PyObjectId = Field(..., description="ID Преподавателя")
-    
-    class Config: 
+
+    class Config:
         populate_by_name = True
 
 #-------------------------
 #Добавить компоненты для AnalyseResult
 class StudentCluster(BaseModel):
-    # type: str = Field(..., description="")
     cluster_label: int = Field(..., description="К какому кластеру принадлежит студент")
+    confidence: float = Field(default=0.0, description="Уверенность классификации")
 
 class EffectivenessSummary(BaseModel):
+    """Метрики эффективности контента для эволюционного анализа"""
+    efficiency_score: float = Field(..., description="Метрика эффективности контента E")
+    average_mastery: float = Field(..., description="Средний уровень освоения группы M_term")
+    
+    # Базовые метрики
     success_coeff: float = Field(..., description="Коэффициент успешности")
     attempts_mean: float = Field(..., description="Среднее количество попыток")
-    mean_time_on_material: float = Field(..., description="среднее количество времени потраченное на материал")
+    mean_time_on_material: float = Field(..., description="Среднее количество времени потраченное на материал")
     usage_coeff: float = Field(..., description="Процент студентов использующих материал больше n минут")
-    difficlty_coeff: float = Field(..., description="Коэффициент сложности")
+    difficulty_coeff: float = Field(..., description="Коэффициент сложности")
     mean_time_on_question: float = Field(..., description="Среднее время потраченное на вопрос")
-    learn_curve: float = Field(..., description="Кривая обчуения")
-    success_coeff_vs_mean: float = Field(..., description="Коэффицент успешности в сравнении с средним по курсу")
+    learn_curve: float = Field(..., description="Кривая обучения")
+    success_coeff_vs_mean: float = Field(..., description="Коэффициент успешности в сравнении со средним по курсу")
+    
+    # Дистракторный анализ
     top_distractors: List[str] = Field(..., description="Список самых частых дистракторов")
-    distractor_rates: Dict[str, int] = Field(..., description="Частота выбора дистрактора")
+    distractor_rates: Dict[str, float] = Field(..., description="Частота выбора дистрактора (D_p индекс)")
+    error_pattern_weights: Dict[str, float] = Field(default_factory=dict, description="Вес паттерна ошибки W_p")
+    
+    # Агрегированные данные
     wrong_attempts: int = Field(..., description="Общее количество неудачных попыток")
     total_events: int = Field(..., description="Общее количество взаимодействий")
     unique_students: int = Field(..., description="Уникальные студенты")
     
+    # Таксономия Блума
+    mastery_by_bloom_level: Dict[str, float] = Field(default_factory=dict, description="Уровень освоения по уровням Блума")
 
-#--------------EngagementAnalyse-------------------
 class ActivityMetrics(BaseModel):
-    total_events: int = Field(..., description="Общее количетсво событий")
+    """Метрики активности студента"""
+    total_events: int = Field(..., description="Общее количество событий")
     events_per_day: float = Field(..., description="Событий в день")
     avg_correctness: float = Field(..., description="Средняя правильность")
     total_learning_time: float = Field(..., description="Общее время на обучение")
-    total_material_time: float = Field(..., description="время потраченное на материал")
-    total_question_time: float = Field(..., description="время потраченное на вопросы")
-    total_attempts: int = Field(..., description="общее кол-во попыток")
+    total_material_time: float = Field(..., description="Время потраченное на материал")
+    total_question_time: float = Field(..., description="Время потраченное на вопросы")
+    total_attempts: int = Field(..., description="Общее кол-во попыток")
     activity_duration_days: int = Field(..., description="Продолжительность активности дней")
 
-class LearningPAtternMetrics(BaseModel):
-    engagement_material_coeff: float = Field(..., description="Коэффициент_вовлеченности_материала")
-    attempts_rate: float = Field(..., description="Частота_попыток")
-    mean_attempts_on_question: float = Field(..., description="Ср_кол_во_попыток_на_вопрос")
+class LearningPatternMetrics(BaseModel):
+    engagement_material_coeff: float = Field(..., description="Коэффициент вовлеченности материала")
+    attempts_rate: float = Field(..., description="Частота попыток")
+    mean_attempts_on_question: float = Field(..., description="Ср. кол-во попыток на вопрос")
     consistency_score: float = Field(..., description="")
     time_spent_on_material_vs_on_total_time: float = Field(..., description="Отношение времени потраченное на материал и общего времени")
     passive_consumption: float = Field(..., description="Индекс пассивного потребления")
     efficiency_of_efforts: float = Field(..., description="Эффективность усилий")
 
 class TempPatternMetrics(BaseModel):
-    hour_distr: Optional[int] = Field(..., description="Распределение часов")
-    activity_on_wekend_coeff: float = Field(..., description="Активность на выходных")
+    hour_distr: Optional[Dict[int, float]] = Field(None, description="Распределение часов")
+    activity_on_weekend_coeff: float = Field(..., description="Активность на выходных")
     regular_coeff: float = Field(..., description="Коэффициент регулярности")
-    most_activity_day: Optional[int] = Field(..., description="Самые активные дни")
+    most_activity_day: Optional[int] = Field(None, description="Самые активные дни")
     mean_time_session: float = Field(..., description="Среднее время сессии")
     activity_var: float = Field(..., description="Дисперсия активности")
-
 
 class EfficiencyMetrics(BaseModel):
     learn_efficiency: float = Field(..., description="Эффективность обучения")
     learn_curve: float = Field(..., description="Кривая обучения")
     knowledge_retention: float = Field(..., description="")
-    time_effiency: float = Field(..., description="Эффективность по времени")
-    session_regular: float = Field(..., description="регулярность занятий")
+    time_efficiency: float = Field(..., description="Эффективность по времени")
+    session_regular: float = Field(..., description="Регулярность занятий")
 
-
-class AnomalyAssesmentsMetrics(BaseModel):
+class AnomalyAssessmentsMetrics(BaseModel):
     anomaly_flag: int = Field(..., description="Принадлежность к аномалии")
     anomaly_score: float = Field(..., description="Коэффициент аномальности")
 
 class EngagementAnalyse(BaseModel):
-    student_id: str = Field(..., description="ID студента")
+    student_id: PyObjectId = Field(..., description="ID студента")
     activity: ActivityMetrics = Field(..., description="Метрика активности")
-    leanring_patterns: LearningPAtternMetrics = Field(..., description="Паттерны обчуения")
+    learning_patterns: LearningPatternMetrics = Field(..., description="Паттерны обучения")
     temp_patterns: TempPatternMetrics = Field(..., description="Временные паттерны")
     efficiency: EfficiencyMetrics = Field(..., description="Эффективность")
-    anomaly_assestment: AnomalyAssesmentsMetrics = Field(..., description="Признаки аномальности")
+    anomaly_assessment: AnomalyAssessmentsMetrics = Field(..., description="Признаки аномальности")
 
+class AdaptationDirective(BaseModel):
+    """Директива для Агента-Планировщика на перегенерацию контента"""
+    strategy: AdaptationStrategy = Field(..., description="Стратегия адаптации")
+    trigger_metric: str = Field(..., description="Метрика, вызвавшая директиву (E, D_p, M_term)")
+    trigger_value: float = Field(..., description="Значение метрики")
+    directive_text: str = Field(..., description="Текстовая инструкция для LLM")
+    priority: int = Field(default=1, ge=1, le=5, description="Приоритет директивы (1-высший)")
+
+class MlAnalysisResult(BaseModel):
+    """Результат агрегированного анализа для группы (хранится в ml_analysis_results)"""
+    artifact_id: PyObjectId = Field(..., description="Ссылка на оцениваемую версию контента")
+    topic_id: Optional[PyObjectId] = Field(None, description="ID темы")
+    term_id: Optional[PyObjectId] = Field(None, description="ID термина")
+    
+    # Метрики
+    efficiency_score: float = Field(..., description="Метрика эффективности контента E")
+    efficiency_fresh: float = Field(0.0, description="Метрика эффективности контента E на новой когорте")
+    average_mastery: float = Field(..., description="Средний уровень освоения группы M_term")
+    
+    # Дистракторный анализ
+    top_error_patterns: List[ErrorType] = Field(default_factory=list, description="Массив доминирующих типов ошибок в группе")
+    distractor_indices: Dict[str, float] = Field(default_factory=dict, description="Индексы деструктивности D_p по типам ошибок")
+    
+    # Директивы для перегенерации
+    adaptation_directives: List[AdaptationDirective] = Field(default_factory=list, description="Инструкции для Агента-Планировщика")
+    
+    # Метаданные анализа
+    analysis_date: datetime = Field(default_factory=datetime.utcnow, description="Дата анализа")
+    unique_students: int = Field(..., description="Количество уникальных студентов в выборке")
+    total_events: int = Field(..., description="Общее количество событий")
+    trigger: Optional[AnalysisTrigger] = Field(None, description="Триггер, вызвавший анализ")
+    
+    class Config:
+        populate_by_name = True
+        use_enum_values = True
 
 #-------------------------
 class AnalyseResult(BaseModel):
+    """Устаревшая модель, используется MlAnalysisResult для нового анализа"""
     last_analysis_date: datetime = Field(default_factory=datetime.utcnow, description="")
-    student_id: str = Field(..., description="ID студента")
-    topic_id: str = Field(..., description="ID темы")
-
+    student_id: PyObjectId = Field(..., description="ID студента")
+    topic_id: PyObjectId = Field(..., description="ID темы")
 
     studentcluster: StudentCluster = Field(..., description="")
     effectiveness: EffectivenessSummary = Field(..., description="")
