@@ -60,17 +60,23 @@ app.include_router(
     prefix=settings.API_V1_STR,
     tags=["Auth"]
 )
- 
+
 from src.api.routers.v1.analysis import analyse_router
 app.include_router(
     analyse_router,
     prefix=settings.API_V1_STR,
-    tags=["ANALYSIS"]
+)
+
+from src.api.routers.v1.analysis_cs import analysis_router
+app.include_router(
+    analysis_router,
+    prefix=settings.API_V1_STR,
+    tags=["Analysis Module (CS)"]
 )
 
 
 app.include_router(
-    llm_router, 
+    llm_router,
     prefix=settings.API_V1_STR,
 )
 
