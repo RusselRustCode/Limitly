@@ -14,9 +14,6 @@ import yaml
 from src.core.models import TraceLog, ErrorType, MlAnalysisResult
 
 
-# ==================== КОНСТАНТЫ ИЗ YAML ====================
-# Теперь все пороги и time_ref загружаются из config/planner/planner_rules.yaml
-# (см. следующий шаг)
 
 # ==================== ФОРМУЛЫ ====================
 
@@ -84,7 +81,6 @@ class MetricsCalculator:
         self.config = self.load_config()
         self.thresholds = self.config["thresholds"]
         
-        # Загружаем пороги
         self.n_threshold           = self.thresholds["n_threshold"]
         self.m_min                 = self.thresholds["m_min"]
         self.t_low                 = self.thresholds["t_low"]

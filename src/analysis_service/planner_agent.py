@@ -19,7 +19,7 @@ class PlannerAgent:
         self.thresholds = self.config['thresholds']
         self.rules = self.config['rules']
         self.global_settings = self.config['global']
-        self.fallback = self.config['fallback']
+        self.fallback = self.config['fallback_rule']
         
         
     def load_config(self):
@@ -29,10 +29,10 @@ class PlannerAgent:
         
     def evaluate_condition(self, condition: str, metrics: Dict) -> bool:
         safe_globals = {"__builtins__": {}}
-        eval(condition, safe_globals, {**self.thresholds, **metrics})        
+        return eval(condition, safe_globals, {**self.thresholds, **metrics})        
         
         
-    def get_derectives(self, metrics: Dict) -> List[AdaptationDirective]:
+    def get_directives(self, metrics: Dict) -> List[AdaptationDirective]:
         """
         Главный метод: возвращает список директив на основе метрик.
         Автоматически использует E_fresh если включено в настройках.
@@ -56,7 +56,7 @@ class PlannerAgent:
 
         return [self._create_directive(r) for r in selected]  
     
-    def create_directive(self, rule: Dict) -> AdaptationDirective:
+    def _create_directive(self, rule: Dict) -> AdaptationDirective:
         return AdaptationDirective(
             strategy=AdaptationStrategy(rule["directive"]["action"]),
             trigger_metric=rule.get("trigger_metric", "M_term"),

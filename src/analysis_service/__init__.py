@@ -15,7 +15,6 @@ from src.analysis_service.metrics_service import (
     calculate_weighted_mastery,
     calculate_efficiency_score,
     calculate_distractor_index,
-    calculate_artifact_efficiency_fresh
     # ← новый важный метод
 )
 
