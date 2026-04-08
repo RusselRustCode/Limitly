@@ -19,10 +19,17 @@ async def generate(
     old_content: str = "",
     imaginary_gradient: Optional[List[dict]] = None,
     related_terms: Optional[List[str]] = None,
-    profile_id: str = "engineer"
+    profile_id: str = "engineer",
+    prompt_mode: Optional[str] = None  # NEW: 'full', 'min', или None для авто-выбора
 ) -> LLMGeneratedContent:
     """
     Универсальный эндпоинт для генерации контента.
+    
+    Args:
+        prompt_mode: Режим системного промпта. 
+                     'full' — полная роль + профиль (педагогический подход)
+                     'min' — минимальная роль (максимальная точность)
+                     None — авто-выбор по типу контента (тесты/задачи=Min, остальное=Full)
     """
     try:
         result = await generate_adaptive_content(
@@ -31,7 +38,8 @@ async def generate(
             old_content=old_content,
             imaginary_gradient=imaginary_gradient,
             related_terms=related_terms,
-            profile_id=profile_id
+            profile_id=profile_id,
+            prompt_mode=prompt_mode
         )
         return result
     except HTTPException:
