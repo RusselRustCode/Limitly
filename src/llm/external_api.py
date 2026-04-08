@@ -13,7 +13,7 @@ from src.core.models import (
     ExplanationContent, TestContent, TopicContent, TermContent, ProblemContent
 )
 
-from src.llm.render import render_template          # Jinja2 рендерер
+from src.llm.render import render_template, select_prompt_template          # Jinja2 рендерер + выбор режима
 from src.llm.profiles import get_profile            # загрузка профилей
 from src.analysis_service.planner_agent import PlannerAgent
 
@@ -41,11 +41,15 @@ async def generate_adaptive_content(
     old_content: str = "",
     imaginary_gradient: Optional[List[dict]] = None,
     related_terms: Optional[List[str]] = None,
-    profile_id: Optional[str] = None
+    profile_id: Optional[str] = None,
+    prompt_mode: Optional[str] = None  # NEW: 'full', 'min', или None для авто-выбора
 ) -> LLMGeneratedContent:
     """
     Универсальная адаптивная генерация.
     Теперь profile_id — главный переключатель. Всё остальное берётся из profiles.yaml.
+    
+    Args:
+        prompt_mode: Режим системного промпта ('full', 'min' или None для авто-выбора по типу контента)
     """
     # Приоритет: если передали profile_id в параметрах — используем его
     final_profile_id = profile_id or getattr(params, "profile_id", "engineer")
@@ -77,17 +81,11 @@ async def generate_adaptive_content(
         "parameters": params.model_dump() if hasattr(params, "model_dump") else {}
     }
 
-    # Выбор шаблона
-    template_map = {
-        ContentParams: "explanation_adaptive.j2",
-        TestParams:    "test_generate_adaptive.j2",
-        ProblemParams: "problem_example_adaptive.j2",
-        TopicsParams:  "topics_adaptive.j2",
-        TermsParams:   "terms_adaptive.j2"
-    }
-    template_name = template_map.get(type(params))
-    if not template_name:
-        raise HTTPException(status_code=400, detail=f"Неизвестный тип параметров: {type(params)}")
+    # Выбор шаблона с учётом режима (Full/Min)
+    params_type = type(params).__name__
+    template_name = select_prompt_template(params_type, prompt_mode)
+    
+    logger.info(f"=== PROMPT MODE: {prompt_mode or 'auto'} | TEMPLATE: {template_name} ===")
 
     try:
         prompt_text = render_template(template_name, context)
