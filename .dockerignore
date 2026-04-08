@@ -6,7 +6,8 @@ __pycache__
 README.md
 docker-compose.yml
 docker-compose.prod.yml
-tests/
+# tests/
 *.log
 .venv
 venv/
+/docs

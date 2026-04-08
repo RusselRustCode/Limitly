@@ -26,3 +26,7 @@ requirements.txt
 системные_промпты.txt
 *.gif
 tests/
+
+# Environment variables
+.env
+/docs
