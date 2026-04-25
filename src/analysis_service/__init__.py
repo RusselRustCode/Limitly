@@ -39,6 +39,6 @@ __all__ = [
     "PlannerAgentV2",
 
     # Сервис и репозиторий
-    "AnalysisService",
+    "AnalyseService",
     "AnalyseRepository",
 ]
