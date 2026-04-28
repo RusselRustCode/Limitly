@@ -2,38 +2,37 @@ version: '3.8'
 
 services:
   backend:
-    build: .                    
-    container_name: fastapi_backend
+    build: .
+    container_name: limithy_backend
     ports:
-      - "8000:8000"             
-    environment:
-      - MONGODB_URL=mongodb://admin:password@mongo:27017/myapp?authSource=admin  
+      - "8000:8000"
+    env_file:
+      - .env                      # все переменные берутся из .env
     depends_on:
-      - mongo                    
+      - mongo                     # только если используешь локальную БД
     volumes:
-      - .:/app                  
+      - .:/app
     networks:
       - app-network
 
-  
+  # Локальная MongoDB — нужна только если MONGODB_URL=mongodb://localhost:27017
+  # docker compose up backend
   mongo:
-    image: mongo:7.0            
-    container_name: mongodb
+    image: mongo:7.0
+    container_name: limithy_mongo
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password
     ports:
-      - "27017:27017"           
+      - "27017:27017"
     volumes:
-      - mongo-data:/data/db     
+      - mongo-data:/data/db
     networks:
       - app-network
-
 
 networks:
   app-network:
     driver: bridge
 
-
 volumes:
-  mongo-data:                   
+  mongo-data:
