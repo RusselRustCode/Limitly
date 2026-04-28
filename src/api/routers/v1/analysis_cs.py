@@ -20,7 +20,7 @@ from src.core.models import (
     AnalysisTrigger,
     GeneratedArtifact,
 )
-from src.analysis_service import AnalysisService, AnalyseRepository
+from src.analysis_service import AnalyseService, AnalyseRepository
 from src.data_ingestion.trace_repo import TraceRepository
 
 
@@ -42,9 +42,9 @@ def get_analysis_repo() -> AnalyseRepository:
 def get_analysis_service(
     trace_repo: TraceRepository = Depends(get_trace_repo),
     analysis_repo: AnalyseRepository = Depends(get_analysis_repo)
-) -> AnalysisService:
-    """Зависимость для получения AnalysisService"""
-    return AnalysisService(
+) -> AnalyseService:
+    """Зависимость для получения AnalyseService"""
+    return AnalyseService(
         trace_repo=trace_repo,
         repo=analysis_repo
     )
@@ -57,7 +57,7 @@ async def analyze_artifact(
     artifact_id: str,
     force: bool = Query(False, description="Принудительный запуск анализа"),
     bloom_weight: float = Query(1.0, ge=1.0, le=3.0, description="Вес Блума для артефакта"),
-    service: AnalysisService = Depends(get_analysis_service)
+    service: AnalyseService = Depends(get_analysis_service)
 ) -> Dict:
     """
     Запуск анализа цифрового следа для артефакта.
@@ -104,7 +104,7 @@ async def analyze_artifact(
 @analysis_router.get("/artifact/{artifact_id}")
 async def get_analysis_result(
     artifact_id: str,
-    service: AnalysisService = Depends(get_analysis_service)
+    service: AnalyseService = Depends(get_analysis_service)
 ) -> Dict:
     """
     Получение последнего результата анализа для артефакта.
@@ -129,7 +129,7 @@ async def get_analysis_result(
 async def get_adaptation_plan(
     artifact_id: str,
     force_analysis: bool = Query(False, description="Принудительный запуск анализа перед генерацией плана"),
-    service: AnalysisService = Depends(get_analysis_service)
+    service: AnalyseService = Depends(get_analysis_service)
 ) -> Dict:
     """
     Генерация плана адаптации контента для LLM.
@@ -188,7 +188,7 @@ async def get_low_efficiency_artifacts(
 @analysis_router.post("/trigger/check")
 async def check_analysis_trigger(
     artifact_id: str = Body(..., embed=True, description="ID артефакта для проверки"),
-    service: AnalysisService = Depends(get_analysis_service)
+    service: AnalyseService = Depends(get_analysis_service)
 ) -> Dict:
     """
     Проверка необходимости запуска анализа для артефакта.
