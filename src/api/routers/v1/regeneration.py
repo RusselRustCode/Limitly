@@ -18,7 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from pydantic import BaseModel, Field
 
-from src.core.models import ArtifactCreate, LLMModel
+from src.core.models import ArtifactCreate
 from src.data_ingestion.artifacts_repo import ArtifactRepository
 from src.data_ingestion.trace_repo import TraceRepository
 from src.analysis_service.analyse import AnalyseService
