@@ -1,3 +1,37 @@
+def _coerce_list_fields(data: dict, model) -> dict:
+    """
+    LLM иногда возвращает List[str] поля как одну строку вместо списка.
+    Эта функция автоматически разбивает их по переносам строк или номерам пунктов.
+    """
+    from typing import get_args, get_origin
+    result = dict(data)
+    for field_name, field_info in model.model_fields.items():
+        if field_name not in result:
+            continue
+        value = result[field_name]
+        if not isinstance(value, str):
+            continue
+        # Проверяем что поле ожидает список
+        annotation = field_info.annotation
+        if get_origin(annotation) is list:
+            result[field_name] = _str_to_list(value)
+    return result
+
+
+def _str_to_list(text: str) -> list:
+    """Разбивает строку на список элементов."""
+    # Пробуем разбить по нумерованным пунктам: "1. ...", "2. ..."
+    numbered = re.split(r'\n(?=\d+\.\s)', text.strip())
+    if len(numbered) > 1:
+        return [s.strip() for s in numbered if s.strip()]
+    # Пробуем по переносам строк
+    lines = [s.strip() for s in text.split("\n") if s.strip()]
+    if len(lines) > 1:
+        return lines
+    # Одна строка — оборачиваем в список
+    return [text.strip()]
+
+
 """
 Модуль адаптивной генерации контента.
 Единая точка входа для всех типов учебных материалов.
@@ -21,21 +55,51 @@ from src.llm.profiles import get_profile
 
 logger = logging.getLogger(__name__)
 
-_CONTENT_MODEL_MAP = {
-    ContentParams: ExplanationContent,
-    TestParams:    TestContent,
-    ProblemParams: ProblemContent,
-    TopicsParams:  TopicContent,
-    TermsParams:   TermContent,
-}
+# Списки вместо словарей — isinstance работает с подклассами (TopicsRequest → TopicsParams)
+_CONTENT_MODEL_MAP = [
+    (ContentParams, ExplanationContent),
+    (TestParams,    TestContent),
+    (ProblemParams, ProblemContent),
+    (TopicsParams,  TopicContent),
+    (TermsParams,   TermContent),
+]
 
-_DEFAULT_MODEL_BY_CONTENT = {
-    ContentParams: ModelPreset.DEFAULT,
-    TestParams:    ModelPreset.FAST_ACCURATE,
-    ProblemParams: ModelPreset.FAST_ACCURATE,
-    TopicsParams:  ModelPreset.LIGHT,
-    TermsParams:   ModelPreset.LIGHT,
-}
+_DEFAULT_MODEL_BY_CONTENT = [
+    (ContentParams, ModelPreset.DEFAULT),
+    (TestParams,    ModelPreset.FAST_ACCURATE),
+    (ProblemParams, ModelPreset.FAST_ACCURATE),
+    (TopicsParams,  ModelPreset.LIGHT),
+    (TermsParams,   ModelPreset.LIGHT),
+]
+
+_PARAMS_TYPE_NAME = [
+    (ContentParams, "ContentParams"),
+    (TestParams,    "TestParams"),
+    (ProblemParams, "ProblemParams"),
+    (TopicsParams,  "TopicsParams"),
+    (TermsParams,   "TermsParams"),
+]
+
+
+def _get_content_model(params):
+    for base_cls, content_model in _CONTENT_MODEL_MAP:
+        if isinstance(params, base_cls):
+            return content_model
+    raise GenerationError(f"Неизвестный тип параметров: {type(params).__name__}")
+
+
+def _get_default_llm_model(params) -> LLMModel:
+    for base_cls, llm_model in _DEFAULT_MODEL_BY_CONTENT:
+        if isinstance(params, base_cls):
+            return llm_model
+    return ModelPreset.DEFAULT
+
+
+def _get_params_type_name(params) -> str:
+    for base_cls, name in _PARAMS_TYPE_NAME:
+        if isinstance(params, base_cls):
+            return name
+    return type(params).__name__
 
 
 async def generate_adaptive_content(
@@ -56,7 +120,7 @@ async def generate_adaptive_content(
     if not profile:
         raise ValidationError(f"Профиль '{final_profile_id}' не найден в profiles.yaml")
 
-    selected_model = model or _DEFAULT_MODEL_BY_CONTENT.get(type(params), ModelPreset.DEFAULT)
+    selected_model = model or _get_default_llm_model(params)
 
     context = {
         "term_name":              getattr(params, "term_name", ""),
@@ -82,7 +146,7 @@ async def generate_adaptive_content(
         "parameters":  params.model_dump() if hasattr(params, "model_dump") else {},
     }
 
-    params_type   = type(params).__name__
+    params_type   = _get_params_type_name(params)
     template_name = select_prompt_template(params_type, prompt_mode)
 
     logger.info(
@@ -107,10 +171,7 @@ async def generate_adaptive_content(
     return _parse_response(raw_output, params)
 
 
-def _parse_response(
-    raw_output: str,
-    params:     Union[ContentParams, TestParams, TopicsParams, TermsParams, ProblemParams],
-) -> LLMGeneratedContent:
+def _parse_response(raw_output: str, params) -> LLMGeneratedContent:
     try:
         json_str = _extract_json(raw_output)
         repaired = repair_json(json_str, return_objects=True)
@@ -122,7 +183,7 @@ def _parse_response(
         else:
             data = {}
 
-        target_model  = _CONTENT_MODEL_MAP[type(params)]
+        target_model  = _get_content_model(params)
         expected_keys = set(target_model.model_fields.keys())
         reasoning     = data.pop("reasoning", "")
         filtered      = {k: v for k, v in data.items() if k in expected_keys}
@@ -132,14 +193,19 @@ def _parse_response(
                 filtered["explanation_body"], ensure_ascii=False
             )
 
+        # Автоконвертация: LLM иногда возвращает List[str] поля как строку
+        filtered = _coerce_list_fields(filtered, target_model)
+
         for field_name, field_info in target_model.model_fields.items():
             if field_name not in filtered and field_info.default is not None:
                 filtered[field_name] = field_info.default
 
         parsed = target_model.model_validate(filtered)
-        logger.info(f"[generate] парсинг OK | type={type(params).__name__}")
+        logger.info(f"[generate] парсинг OK | type={_get_params_type_name(params)}")
         return LLMGeneratedContent(reasoning=reasoning, content=parsed)
 
+    except GenerationError:
+        raise
     except Exception as e:
         logger.error(
             f"[generate] ошибка парсинга JSON: {e}\n"
