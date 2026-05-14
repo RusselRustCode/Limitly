@@ -5,7 +5,7 @@ from openai import OpenAI
 from fastapi import HTTPException
 
 
-from config.settings import Settings
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class LLMClient:
     def __init__(self):
         self.client = OpenAI(
             base_url="https://rus-gpt.com/api/v1",
-            api_key= Settings.RUSGPT_API_KEY
+            api_key= settings.RUSGPT_API_KEY
         )
         
         logger.info("LLMClient (rus-gpt.com aggregator) инициализирован")
@@ -107,14 +107,14 @@ class LLMClient:
     def invoke(self, 
     prompt: str,
     model: LLMModel = ModelPreset.DEFAULT, 
-    tempertature: float = 0.7,
+    temperature: float = 0.7,
     max_tokens: int = 8000
     ) -> str:
         try:
             response = self.client.chat.completions.create(
                 model = model.value,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=tempertature,
+                temperature=temperature,
                 max_tokens=max_tokens,
             )
             
