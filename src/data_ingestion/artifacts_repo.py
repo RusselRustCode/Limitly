@@ -13,7 +13,7 @@ class ArtifactRepository:
         self.collection = self.db.generated_artifacts
         
     
-    async def save_artifact(self, artifact: ArtifactCreate, created_by: str) -> str:
+    async def save_artifact(self, artifact: ArtifactCreate, created_by: str = None) -> str:
         """
         Сохраняет новую версию артефакта.
  
