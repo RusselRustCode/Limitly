@@ -65,14 +65,19 @@ class TraceRepository:
             docs = []
             for log in logs:
                 doc = log.model_dump(by_alias=True, exclude_none=True)
-                # Гарантируем что timestamp — это datetime объект (не строка)
                 if "timestamp" in doc and isinstance(doc["timestamp"], str):
                     from datetime import datetime
                     doc["timestamp"] = datetime.fromisoformat(doc["timestamp"])
                 docs.append(doc)
             result = await self.collection.insert_many(docs)
             saved  = len(result.inserted_ids)
-            logger.info(f"[TraceRepository] bulk save: {saved} logs")
+            # Verify: проверяем что реально записалось
+            db_name = self.collection.database.name
+            coll_name = self.collection.name
+            logger.info(
+                f"[TraceRepository] bulk save: {saved} logs → "
+                f"db={db_name} | collection={coll_name}"
+            )
             return saved
         except Exception as e:
             logger.error(f"[TraceRepository] save_logs_bulk error: {e}", exc_info=True)
@@ -84,7 +89,17 @@ class TraceRepository:
         limit:       Optional[int] = None,
     ) -> List[TraceLog]:
         try:
-            query  = {"artifact_id": ObjectId(artifact_id)}
+            logger.info(
+                f"[TraceRepository] get_logs_by_artifact | "
+                f"artifact={artifact_id} | "
+                f"db={self.collection.database.name} | "
+                f"collection={self.collection.name}"
+            )
+            # Ищем по обоим форматам: строка и ObjectId
+            try:
+                query = {"artifact_id": {"$in": [artifact_id, ObjectId(artifact_id)]}}
+            except Exception:
+                query = {"artifact_id": artifact_id}
             cursor = self.collection.find(query).sort("timestamp", -1)
             if limit:
                 cursor = cursor.limit(limit)
@@ -100,10 +115,13 @@ class TraceRepository:
         artifact_id: str,
     ) -> List[TraceLog]:
         try:
-            query = {
-                "student_id":  ObjectId(student_id),
-                "artifact_id": ObjectId(artifact_id),
-            }
+            try:
+                query = {
+                    "student_id":  {"$in": [student_id, ObjectId(student_id)]} if len(student_id) == 24 else student_id,
+                    "artifact_id": {"$in": [artifact_id, ObjectId(artifact_id)]},
+                }
+            except Exception:
+                query = {"student_id": student_id, "artifact_id": artifact_id}
             raw = [doc async for doc in self.collection.find(query)]
             return [log for doc in raw if (log := _safe_parse_log(doc)) is not None]
         except Exception as e:
