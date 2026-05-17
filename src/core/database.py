@@ -3,7 +3,7 @@
 
 Поддерживает:
   - Локальную БД:  mongodb://localhost:27017
-  - MongoDB Atlas: строка подключения
+  - MongoDB Atlas: mongodb+srv://user:pass@cluster.mongodb.net/?appName=App
 """
 
 import logging
@@ -27,6 +27,8 @@ def connect_to_mongo() -> None:
     """
     url = settings.MONGODB_URL_ATLAS
 
+    # Atlas требует TLS — motor обрабатывает это через строку подключения,
+    # но явно передаём serverSelectionTimeoutMS чтобы быстро падать при недоступности
     is_atlas = "mongodb+srv" in url
 
     DataBase.client = AsyncIOMotorClient(
