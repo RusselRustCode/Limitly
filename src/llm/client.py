@@ -88,9 +88,11 @@ class LLMClient:
     
     
     def __init__(self):
+        import httpx
         self.client = OpenAI(
             base_url="https://rus-gpt.com/api/v1",
-            api_key= settings.RUSGPT_API_KEY
+            api_key= settings.RUSGPT_API_KEY,
+            http_client = httpx.Client(proxy=None),
         )
         
         logger.info("LLMClient (rus-gpt.com aggregator) инициализирован")
