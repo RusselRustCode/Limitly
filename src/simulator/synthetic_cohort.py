@@ -1,7 +1,14 @@
 """
+Синтетический симулятор студентов на основе IRT 3PL.
+
+Используется для:
+  - Тестирования системы без реальных студентов
+  - Демонстрации цикла: генерация → анализ → регенерация
+  - Экспериментов с разными параметрами когорт
+
 Модель: трёхпараметрическая логистическая (3PL)
   P(S=1 | θ, a, b, c) = c + (1-c) / (1 + exp(-a*(θ-b)))
- 
+
   θ — способность студента
   a — дискриминация вопроса
   b — сложность (зависит от content_quality)
@@ -11,10 +18,13 @@
 import numpy as np
 from scipy.stats import skewnorm
 from bson import ObjectId
-from datetime import datetime, UTC
-from typing import List, Optional, Dict
+from datetime import datetime
+from typing import List, Dict, Optional
 
 from src.core.models import TraceLog, ErrorType
+
+
+# ==================== ПРЕСЕТЫ КОГОРТ ====================
 
 COHORT_PRESETS = {
     "strong": {
@@ -43,61 +53,81 @@ COHORT_PRESETS = {
     },
 }
 
+
 class SyntheticCohort:
-    
-    def __init__(self,
-    n: int = 250,
-    content_quality: float = 0.6,
-    cohort_type:     str   = "mixed",
-    skew:            Optional[float] = None,
-    error_bias:      str  = "balanced",
-    seed:            int  = 42,
+    """
+    Синтетическая когорта студентов для симуляции цифрового следа.
+
+    Args:
+        n:               Количество студентов
+        content_quality: Качество контента [0.0–1.0]. Влияет на b (сложность) и тип ошибок.
+        cohort_type:     Пресет когорты: "strong" | "average" | "weak" | "mixed"
+        skew:            Скос распределения способностей (переопределяет пресет)
+        error_bias:      Доминирующий тип ошибок: "conceptual" | "operational" | "procedural" | "balanced"
+        seed:            Seed для воспроизводимости
+    """
+
+    def __init__(
+        self,
+        n:               int   = 250,
+        content_quality: float = 0.6,
+        cohort_type:     str   = "mixed",
+        skew:            Optional[float] = None,
+        error_bias:      str  = "balanced",
+        seed:            int  = 42,
     ):
-        self.n = n
+        self.n               = n
         self.content_quality = np.clip(content_quality, 0.0, 1.0)
-        self.cohort_type = cohort_type
-        self.error_bias = error_bias
-        self.seed = seed
-        
-        preset = COHORT_PRESETS.get(cohort_type, COHORT_PRESETS["mixed"])
-        self.loc = preset["loc"]
-        self.scale = preset["scale"]
-        self.skew = skew if skew is not None else preset["skew"]
-        
-        self.generate()
-        
-    def generate(self):
+        self.cohort_type     = cohort_type
+        self.error_bias      = error_bias
+        self.seed            = seed
+
+        preset       = COHORT_PRESETS.get(cohort_type, COHORT_PRESETS["mixed"])
+        self._loc    = preset["loc"]
+        self._scale  = preset["scale"]
+        self._skew   = skew if skew is not None else preset["skew"]
+
+        self._generate()
+
+    # ==================== ГЕНЕРАЦИЯ ====================
+
+    def _generate(self):
         np.random.seed(self.seed)
-        
+
+        # Способности студентов θ ~ skew_norm
         self.theta = skewnorm.rvs(
-            loc = self.loc,
-            scale = self.scale,
-            size = self.n,
-            a = self.skew
+            a=self._skew,
+            loc=self._loc,
+            scale=self._scale,
+            size=self.n,
         )
-        
-        a = np.clip(np.random.normal(1.7, 0.25, self.n), 0.5, 3.0)
-        b = -self.content_quality * 2.85
-        c = 0.15
-        
+
+        # IRT параметры
+        a = np.clip(np.random.normal(1.7, 0.25, self.n), 0.5, 3.0)  # discrimination
+        b = -self.content_quality * 2.85                              # difficulty (чем выше quality, тем легче)
+        c = 0.15                                                       # guessing
+
+        # Вероятность правильного ответа
         p_correct = c + (1 - c) / (1 + np.exp(-a * (self.theta - b)))
         self.S = np.random.binomial(1, p_correct)
-        
-        
+
+        # Временной коэффициент и попытки
         self.T_ratio = np.clip(np.random.normal(1.0, 0.38, self.n), 0.35, 2.8)
         self.attempts = np.random.randint(1, 7, self.n)
-        
+
+        # Типы ошибок (зависят от качества контента)
         probs = self._error_probs()
-        self.distractor_type = np.random.choice(["conceptual", "operational", "procedural", "strategic"],
+        self.distractor_type = np.random.choice(
+            ["conceptual", "operational", "procedural", "strategic"],
             self.n,
-            p=probs,)
-        
+            p=probs,
+        )
+
+        # Флаг первой экспозиции (82% студентов видят контент впервые)
         self.first_exposure = np.random.choice(
             [True, False], self.n, p=[0.82, 0.18]
         )
- 
-        
-        
+
     def _error_probs(self) -> List[float]:
         """
         Распределение типов ошибок.
@@ -123,18 +153,20 @@ class SyntheticCohort:
                 round(procedural / total, 3),
                 round(strategic / total, 3),
             ]
-            
+
+    # ==================== ПУБЛИЧНЫЕ МЕТОДЫ ====================
+
     def update_quality(self, new_quality: float):
         """Обновляет качество контента и перегенерирует данные."""
         self.content_quality = np.clip(new_quality, 0.0, 1.0)
         self._generate()
-        
+
     def get_trace_logs(self, artifact_id: str) -> List[TraceLog]:
         """Генерирует список TraceLog для сохранения в БД."""
         logs = []
         for i in range(self.n):
             logs.append(TraceLog(
-                student_id          = str(ObjectId()),
+                student_id          = f"student_{i:03d}",  # "student_000" ... "student_249"
                 artifact_id         = artifact_id,
                 attempts            = int(self.attempts[i]),
                 is_correct          = bool(self.S[i]),
@@ -146,10 +178,10 @@ class SyntheticCohort:
                     ErrorType(self.distractor_type[i]) if not self.S[i] else None
                 ),
                 first_exposure      = bool(self.first_exposure[i]),
-                timestamped         = datetime.now(UTC),
+                timestamp         = datetime.utcnow(),
             ))
         return logs
-    
+
     def compute_metrics(self) -> Dict:
         """
         Вычисляет метрики когорты аналитически (без обращения к БД).
@@ -162,14 +194,14 @@ class SyntheticCohort:
         M_j   = self.S * K_t / np.clip(self.attempts, 1, None)
         M_term = float(np.mean(M_j))
         E      = M_term / 0.8   # нормировка на D_target=0.8
- 
+
         errors      = self.S == 0
         total_error = int(errors.sum())
         D_p = {}
         for et in ["conceptual", "operational", "procedural", "strategic"]:
             count   = int(((np.array(self.distractor_type) == et) & errors).sum())
             D_p[et] = round(count / total_error, 3) if total_error > 0 else 0.0
- 
+
         return {
             "n_students":   self.n,
             "cohort_type":  self.cohort_type,
@@ -183,7 +215,7 @@ class SyntheticCohort:
             "theta_mean":   round(float(self.theta.mean()), 3),
             "theta_std":    round(float(self.theta.std()), 3),
         }
-        
+
     def summary(self) -> str:
         """Текстовое резюме для логов."""
         m = self.compute_metrics()
