@@ -296,9 +296,9 @@ class GeneratedArtifact(ArtifactCreate):
     Полная модель артефакта из БД.
     Используется только для чтения — MongoDB заполняет id и created_by.
     """
-    id:         PyObjectId = Field(alias="_id")
-    created_by: PyObjectId
-    created_at: datetime   = Field(default_factory=datetime.utcnow)
+    id:         PyObjectId          = Field(alias="_id")
+    created_by: Optional[PyObjectId] = None  # None для старых документов без авторизации
+    created_at: datetime             = Field(default_factory=datetime.utcnow)
 
     class Config:
         populate_by_name = True
