@@ -78,7 +78,6 @@ async def generate_content(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== ПРИМЕРЫ ДЛЯ SWAGGER ====================
 
 @llm_router.get(
     "/generate/examples",
