@@ -31,14 +31,21 @@
 4. Используй контекст смежных терминов: {{ related_terms | join(", ") }}
 {% endif %}
 
-{# БЛОК АДАПТАЦИИ #}
-{% if task.version_to > 1 %}
+{# БЛОК АДАПТАЦИИ — поддерживает оба формата директив #}
+{% if task.version_to > 1 and task.imaginary_gradient %}
 ### КОНТЕКСТ АДАПТАЦИИ (v{{ task.version_from }} → v{{ task.version_to }})
 **ТЫ ОБЯЗАН ВЫПОЛНИТЬ СЛЕДУЮЩИЕ ДИРЕКТИВЫ БУКВАЛЬНО:**
 
 {% for d in task.imaginary_gradient %}
+{% if d.directive is defined %}
+{# Старый формат: {directive: {action, target, insight}} #}
 - [{{ d.directive.action }}] → {{ d.directive.target }}
   Инсайт: {{ d.directive.insight }}
+{% else %}
+{# Новый формат: {strategy, directive_text, priority} #}
+- [{{ d.strategy | upper }}] (приоритет {{ d.priority }})
+  Инструкция: {{ d.directive_text }}
+{% endif %}
 {% endfor %}
 
 **Предыдущий текст для редактирования:**
