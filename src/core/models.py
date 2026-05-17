@@ -5,6 +5,7 @@ Pydantic-модели системы.
   - ArtifactCreate  — входная модель для POST /llm/save. БЕЗ id и created_by.
   - GeneratedArtifact — полная модель из БД. Содержит id (от MongoDB) и created_by (от JWT).
   - materia_id удалён — он был дублем _id и путал фронт.
+  - Устаревшие модели (AnalyseResult, EngagementAnalyse и иже с ними) удалены.
 """
 
 from pydantic import BaseModel, Field, EmailStr, BeforeValidator
@@ -15,11 +16,28 @@ from typing import List, Optional, Annotated, Dict, Union
 
 
 def convert_objectid(v):
+    """Конвертирует ObjectId → str. Строки оставляет как есть (student_050, etc.)"""
     if isinstance(v, ObjectId):
         return str(v)
     return v
 
-PyObjectId = Annotated[str, BeforeValidator(convert_objectid)]
+
+def flexible_id(v):
+    """
+    Гибкий ID — принимает:
+      - ObjectId            → str (MongoDB документы)
+      - "507f1f77bc..."     → str (24-hex строка)
+      - "student_050"       → str (произвольная строка, Telegram бот)
+    """
+    if isinstance(v, ObjectId):
+        return str(v)
+    if v is not None:
+        return str(v)
+    return v
+
+
+PyObjectId   = Annotated[str, BeforeValidator(convert_objectid)]
+FlexibleId   = Annotated[str, BeforeValidator(flexible_id)]
 
 
 # =============================================================================
@@ -291,7 +309,7 @@ class GeneratedArtifact(ArtifactCreate):
 # =============================================================================
 
 class TraceLog(BaseModel):
-    student_id:  PyObjectId
+    student_id:  FlexibleId            # строка любого формата: ObjectId, "student_050", etc.
     artifact_id: PyObjectId
     question_id: Optional[PyObjectId] = None
 
@@ -310,7 +328,7 @@ class TraceLog(BaseModel):
         default=True,
         description="True если студент видит этот артефакт впервые"
     )
-    timestamped: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         populate_by_name = True
